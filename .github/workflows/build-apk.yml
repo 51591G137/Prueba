@@ -1,52 +1,62 @@
-name: Construir APK Definitivo
+name: Construir APK (Capacitor)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     
     steps:
-    - name: 1. Descargar el código
+    - name: Descargar repositorio
       uses: actions/checkout@v4
 
-    - name: 2. Configurar Node.js (Sin warnings)
+    - name: Configurar Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '22'
+        node-version: '20'
 
-    - name: 3. Configurar Java (Sin warnings)
-      uses: actions/setup-java@v5
+    - name: Configurar Java
+      uses: actions/setup-java@v4
       with:
         distribution: 'zulu'
         java-version: '17'
 
-    - name: 4. Instalar Bubblewrap y utilidades
+    - name: Construir la App nativa (Wrapper)
       run: |
-        npm install -g @bubblewrap/cli
-        sudo apt-get update && sudo apt-get install -y jq
+        mkdir app-movil
+        cd app-movil
+        npm init -y
+        npm install @capacitor/cli @capacitor/core @capacitor/android
+        
+        mkdir www
+        echo "<html><body>Cargando motor de Python...</body></html>" > www/index.html
+        
+        npx cap init "Mi Restaurante" "com.mirestaurante.app" --web-dir www
+        
+        cat << 'EOF' > capacitor.config.json
+        {
+          "appId": "com.mirestaurante.app",
+          "appName": "Mi Restaurante",
+          "webDir": "www",
+          "bundledWebRuntime": false,
+          "server": {
+            "url": "https://prueba-defz.onrender.com/",
+            "cleartext": true
+          }
+        }
+        EOF
+        
+        npx cap add android
 
-    - name: 5. Crear certificado de seguridad propio (Evita bloqueos)
+    - name: Compilar el APK de Android
       run: |
-        keytool -genkeypair -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass 12345678 -keypass 12345678 -dname "CN=App,O=App,C=ES"
-
-    - name: 6. Inyectar certificado en tu configuración sin tocar tu código
-      run: |
-        jq '.signingKey = {"path": "android.keystore", "alias": "android"}' twa-manifest.json > temp.json
-        mv temp.json twa-manifest.json
-
-    - name: 7. Configurar rutas para la máquina
-      run: |
-        mkdir -p ~/.bubblewrap
-        echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
-
-    - name: 8. Compilar el APK (Forzando contraseñas y saltando validaciones)
-      run: |
-        printf "12345678\n12345678\n" | bubblewrap build --skipPwaValidation
-      
-    - name: 9. Guardar el APK final
+        cd app-movil/android
+        chmod +x gradlew
+        ./gradlew assembleDebug
+        
+    - name: Subir el APK final
       uses: actions/upload-artifact@v4
       with:
         name: mi-restaurante-apk
-        path: '**/*.apk'
+        path: app-movil/android/app/build/outputs/apk/debug/app-debug.apk
