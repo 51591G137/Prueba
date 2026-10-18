@@ -14,10 +14,10 @@ jobs:
     - name: Configurar Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '24' # Soluciona el aviso de Node.js
+        node-version: '24'
 
     - name: Instalar Java
-      uses: actions/setup-java@v5 # Soluciona el aviso de Java
+      uses: actions/setup-java@v5
       with:
         distribution: 'zulu'
         java-version: '17'
@@ -25,14 +25,19 @@ jobs:
     - name: Instalar Bubblewrap
       run: npm install -g @bubblewrap/cli
 
-    - name: Configurar rutas para que la máquina no haga preguntas
+    - name: Configurar rutas de Android
       run: |
         mkdir -p ~/.bubblewrap
         echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
 
-    - name: Compilar el APK (Respondiendo contraseñas automáticamente)
+    - name: Generar carpetas de Android (Sin preguntas)
       run: |
-        yes "12345678" | bubblewrap build --manifest=twa-manifest.json
+        yes | bubblewrap init --manifest=twa-manifest.json
+      
+    - name: Compilar APK (Modo prueba, sin contraseñas)
+      run: |
+        chmod +x gradlew
+        ./gradlew assembleDebug
       
     - name: Guardar el archivo APK generado
       uses: actions/upload-artifact@v4
