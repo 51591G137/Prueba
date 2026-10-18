@@ -1,0 +1,17 @@
+{
+  "packageId": "com.mirestaurante.app",
+  "host": "Thttps://prueba-defz.onrender.com/",
+  "name": "Mi Restaurante",
+  "launcherName": "Restaurante",
+  "display": "standalone",
+  "themeColor": "#FFFFFF",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#FFFFFF",
+  "startUrl": "/",
+  "iconUrl": "https://raw.githubusercontent.com/GoogleChromeLabs/bubblewrap/main/core/src/assets/icon.png",
+  "splashScreenFadeOutDuration": 300,
+  "fallbackType": "customtabs"
+}
