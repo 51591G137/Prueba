@@ -1,0 +1,36 @@
+name: Construir APK de Android
+
+on:
+  workflow_dispatch: # Esto nos permite ejecutar el proceso manualmente con un botón
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Descargar el código
+      uses: actions/checkout@v3
+
+    - name: Configurar Node.js (Necesario para la herramienta)
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+
+    - name: Instalar Java (Necesario para Android)
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '11'
+
+    - name: Instalar Bubblewrap
+      run: npm install -g @bubblewrap/cli
+
+    - name: Aceptar licencias de Android y compilar el APK
+      run: |
+        echo "y" | bubblewrap build --manifest=twa-manifest.json --skipPwaValidation
+      
+    - name: Guardar el archivo APK generado
+      uses: actions/upload-artifact@v3
+      with:
+        name: mi-restaurante-apk
+        path: app-release-unsigned.apk
