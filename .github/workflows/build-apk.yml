@@ -11,13 +11,13 @@ jobs:
     - name: Descargar el código
       uses: actions/checkout@v4
 
-    - name: Configurar Node.js (Necesario para la herramienta)
+    - name: Configurar Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
+        node-version: '24' # Soluciona el aviso de Node.js
 
-    - name: Instalar Java (Necesario para Android)
-      uses: actions/setup-java@v4
+    - name: Instalar Java
+      uses: actions/setup-java@v5 # Soluciona el aviso de Java
       with:
         distribution: 'zulu'
         java-version: '17'
@@ -25,12 +25,17 @@ jobs:
     - name: Instalar Bubblewrap
       run: npm install -g @bubblewrap/cli
 
-    - name: Aceptar licencias de Android y compilar el APK
+    - name: Configurar rutas para que la máquina no haga preguntas
       run: |
-        echo "y" | bubblewrap build --manifest=twa-manifest.json --skipPwaValidation
+        mkdir -p ~/.bubblewrap
+        echo "{\"jdkPath\":\"$JAVA_HOME\",\"androidSdkPath\":\"$ANDROID_HOME\"}" > ~/.bubblewrap/config.json
+
+    - name: Compilar el APK (Respondiendo contraseñas automáticamente)
+      run: |
+        yes "12345678" | bubblewrap build --manifest=twa-manifest.json
       
     - name: Guardar el archivo APK generado
       uses: actions/upload-artifact@v4
       with:
         name: mi-restaurante-apk
-        path: app-release-unsigned.apk
+        path: '**/*.apk'
