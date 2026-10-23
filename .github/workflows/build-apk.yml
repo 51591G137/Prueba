@@ -1,62 +1,127 @@
-name: Construir APK (Capacitor)
+name: Construir APKs (restaurante y cliente)
 
+# Se lanza a mano: pestaña Actions -> "Construir APKs" -> Run workflow.
+# Cada APK es solo un "envoltorio" que abre la web de Render, así que NO hace falta
+# volver a construirlos cuando cambies el código de la app: basta con desplegar en Render.
+# Solo hay que reconstruirlos si cambias el nombre, el identificador o la URL de abajo.
 on:
   workflow_dispatch:
 
 jobs:
   build:
+    name: APK ${{ matrix.nombre }}
     runs-on: ubuntu-22.04
-    
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false # si una app falla, la otra se construye igualmente
+      matrix:
+        include:
+          - nombre: restaurante
+            app_id: com.mirestaurante.restaurante
+            app_name: Restaurante Gestión
+            app_url: https://prueba-defz.onrender.com/restaurante/
+            app_color: '#1e5a46'
+          - nombre: cliente
+            app_id: com.mirestaurante.cliente
+            app_name: Restaurante Cliente
+            app_url: https://prueba-defz.onrender.com/cliente/
+            app_color: '#86203f'
+
+    env:
+      APP_ID: ${{ matrix.app_id }}
+      APP_NAME: ${{ matrix.app_name }}
+      APP_URL: ${{ matrix.app_url }}
+      APP_COLOR: ${{ matrix.app_color }}
+      CAPACITOR_VERSION: 8.5.2 # Capacitor 8 necesita Node 22 y Java 21
+      CAPACITOR_APP_VERSION: 8.1.1 # plugin que hace que el botón "Atrás" navegue por la web
+
     steps:
-    - name: Descargar repositorio
-      uses: actions/checkout@v4
+      - name: Descargar repositorio
+        uses: actions/checkout@v6
 
-    - name: Configurar Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
 
-    - name: Configurar Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'zulu'
-        java-version: '21'
+      - name: Configurar Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: '21'
 
-    - name: Construir la App nativa (Wrapper)
-      run: |
-        mkdir app-movil
-        cd app-movil
-        npm init -y
-        npm install @capacitor/cli @capacitor/core @capacitor/android
-        
-        mkdir www
-        echo "<html><body>Cargando motor de Python...</body></html>" > www/index.html
-        
-        npx cap init "Mi Restaurante" "com.mirestaurante.app" --web-dir www
-        
-        cat << 'EOF' > capacitor.config.json
-        {
-          "appId": "com.mirestaurante.app",
-          "appName": "Mi Restaurante",
-          "webDir": "www",
-          "bundledWebRuntime": false,
-          "server": {
-            "url": "https://prueba-defz.onrender.com/",
-            "cleartext": true
-          }
-        }
-        EOF
-        
-        npx cap add android
+      - name: Crear el proyecto Android (Capacitor)
+        run: |
+          set -euo pipefail
+          mkdir app-movil
+          cd app-movil
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund \
+            @capacitor/core@$CAPACITOR_VERSION \
+            @capacitor/cli@$CAPACITOR_VERSION \
+            @capacitor/android@$CAPACITOR_VERSION \
+            @capacitor/app@$CAPACITOR_APP_VERSION
 
-    - name: Compilar el APK de Android
-      run: |
-        cd app-movil/android
-        chmod +x gradlew
-        ./gradlew assembleDebug
-        
-    - name: Subir el APK final
-      uses: actions/upload-artifact@v4
-      with:
-        name: mi-restaurante-apk
-        path: app-movil/android/app/build/outputs/apk/debug/app-debug.apk
+          # Ojo: no se usa "npx cap init". Crearía un capacitor.config.ts que tiene prioridad
+          # sobre el .json y haría que el APK ignorase la URL de Render.
+          mkdir www
+          node - <<'EOF'
+          const fs = require('fs');
+          const { APP_ID, APP_NAME, APP_URL, APP_COLOR } = process.env;
+
+          // Pantalla local: se muestra si la web no carga (sin internet o con Render aún
+          // despertando) y reintenta sola cada 8 segundos.
+          const page = `<!DOCTYPE html>
+          <html lang="es">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>${APP_NAME}</title>
+            <style>
+              body { margin: 0; padding: 0 24px; background: #f2f4ef; color: #1f2a2e; font: 18px/1.5 system-ui, sans-serif; }
+              header { margin: 0 -24px 32px; padding: 16px 24px; background: ${APP_COLOR}; color: #fff; font-weight: 700; }
+              h1 { font-size: 22px; }
+              button { min-height: 48px; padding: 0 24px; border: 0; border-radius: 8px; background: ${APP_COLOR}; color: #fff; font: inherit; font-weight: 600; }
+            </style>
+          </head>
+          <body>
+            <header>${APP_NAME}</header>
+            <h1>Conectando con el servidor…</h1>
+            <p>Si la app llevaba un rato sin usarse, el servidor gratuito puede tardar hasta un minuto en despertar. Se reintenta solo.</p>
+            <p>Si el problema continúa, comprueba tu conexión a internet.</p>
+            <button onclick="retry()">Reintentar ahora</button>
+            <script>
+              function retry() { location.href = ${JSON.stringify(APP_URL)}; }
+              setTimeout(retry, 8000);
+            </script>
+          </body>
+          </html>`;
+          fs.writeFileSync('www/index.html', page);
+          fs.writeFileSync('www/error.html', page);
+
+          fs.writeFileSync('capacitor.config.json', JSON.stringify({
+            appId: APP_ID,
+            appName: APP_NAME,
+            webDir: 'www',
+            server: { url: APP_URL, errorPath: 'error.html' },
+          }, null, 2));
+          EOF
+
+          npx cap add android
+
+      - name: Compilar el APK
+        working-directory: app-movil/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Renombrar el APK
+        run: cp app-movil/android/app/build/outputs/apk/debug/app-debug.apk "${{ matrix.nombre }}.apk"
+
+      - name: Subir el APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: apk-${{ matrix.nombre }}
+          path: ${{ matrix.nombre }}.apk
+          if-no-files-found: error
