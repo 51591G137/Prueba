@@ -93,14 +93,21 @@ Todas devuelven JSON. Los errores tienen la forma `{"error": "mensaje"}` con có
 
 | Método y ruta | Descripción |
 |---|---|
-| `GET/POST /api/users`, `GET /api/users/<id>` | Usuarios de la app de gestión |
-| `GET/POST /api/customers`, `GET /api/customers/<id>` | Clientes |
+| `GET/POST /api/users` · `GET/PATCH/DELETE /api/users/<id>` | Usuarios de la app de gestión |
+| `GET/POST /api/customers` · `GET /api/customers/<id>` · `GET /api/customers/<id>/reservations` | Clientes y sus reservas |
 | `GET/POST /api/users/<id>/restaurants` | Restaurantes de un usuario |
-| `GET /api/restaurants`, `GET /api/restaurants/<id>` | Todos los restaurantes / uno |
-| `GET/POST /api/restaurants/<id>/tables` | Mesas. Con `?date=AAAA-MM-DD&time=HH:MM` cada mesa indica `reserved` |
-| `GET/POST /api/restaurants/<id>/menu` | Platos del menú |
-| `GET /api/restaurants/<id>/reservations?date=AAAA-MM-DD[&time=HH:MM]` | Reservas de un día, opcionalmente de una hora |
-| `POST /api/reservations` | Reservar: `customer_id`, `table_id`, `date`, `time`. Responde 409 si la mesa ya está reservada |
+| `GET /api/restaurants` · `GET /api/restaurants/<id>` | Todos los restaurantes / uno |
+| `GET/POST /api/restaurants/<id>/tables` · `PATCH/DELETE /api/restaurants/<id>/tables/<tid>` | Mesas. `GET` acepta `?date=AAAA-MM-DD&time=HH:MM` y devuelve `reserved` además de `status` (`free`/`occupied`) |
+| `GET/POST /api/restaurants/<id>/menu` · `PATCH/DELETE /api/restaurants/<id>/menu/<mid>` | Platos del menú |
+| `GET/POST /api/restaurants/<id>/payment-methods` · `PATCH/DELETE /api/restaurants/<id>/payment-methods/<pid>` | Métodos de pago |
+| `GET /api/restaurants/<id>/reservations?date=AAAA-MM-DD[&time=HH:MM]` | Reservas de un día |
+| `POST /api/reservations` · `PATCH/DELETE /api/reservations/<id>` | Crear / editar / borrar una reserva |
+| `GET /api/restaurants/<id>/orders[?table_id=X&active=true]` | Comandas del restaurante |
+| `GET /api/orders/<id>` · `POST /api/restaurants/<id>/orders` | Detalle / crear comanda (`items: [{item_id, quantity}]`) |
+| `PATCH/DELETE /api/orders/<id>` | Editar (estado, peticiones) / borrar comanda sin facturar |
+| `POST /api/orders/<id>/items` · `PATCH/DELETE /api/orders/<id>/items/<oiid>` | Añadir / editar / quitar platos de una comanda |
+| `POST /api/tables/<tid>/bill` | Emite factura para la mesa (cobra si recibe `payment_method_id`) |
+| `POST /api/bills/<id>/pay` · `GET /api/bills/<id>` · `GET /api/restaurants/<id>/bills` | Cobrar / ver / listar facturas |
 
 ## Límites de esta versión
 

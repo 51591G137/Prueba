@@ -413,3 +413,110 @@ select {
   gap: 12px;
   margin: 24px 0;
 }
+/* ---------- Comandas, facturas y estados ---------- */
+
+.badge {
+  display: inline-block;
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.badge.free {
+  background: #dfeee3;
+  color: #1e5a46;
+}
+
+.badge.occupied {
+  background: #f7dcdc;
+  color: #a4262c;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid currentColor;
+}
+
+.btn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn.small.ghost {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: var(--accent);
+}
+
+.btn.small.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* Fila compacta de un plato dentro de una comanda */
+.list.compact > li {
+  border-bottom: 1px solid var(--rule);
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 0;
+}
+
+.item-row .price {
+  flex: none;
+  min-width: 60px;
+  text-align: right;
+}
+
+.order-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.inline-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.inline-form select,
+.inline-form input {
+  min-width: 0;
+}
+
+.inline-form select {
+  flex: 1 1 auto;
+}
+
+.inline-form input {
+  flex: 0 0 72px;
+  width: 72px;
+}
+
+@media (max-width: 420px) {
+  .inline-form {
+    flex-wrap: wrap;
+  }
+
+  .inline-form select {
+    flex-basis: 100%;
+  }
+}

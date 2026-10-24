@@ -1,6 +1,7 @@
 'use strict';
 /* App de clientes: cliente -> restaurantes -> mesas (con reserva) y menú.
-   Rutas: #/ · #/c/3 · #/c/3/r/7/mesas|menu */
+   Añade: "Mis reservas" con edición y borrado.
+   Rutas: #/ · #/c/3 · #/c/3/reservas · #/c/3/r/7/mesas|menu */
 
 const TABS = [
   ['mesas', 'Mesas'],
@@ -9,6 +10,7 @@ const TABS = [
 
 startRouter((parts, isStale) => {
   const [a, customerId, b, restaurantId, tab] = parts;
+  if (a === 'c' && customerId && b === 'reservas') return viewMyReservations(customerId, isStale);
   if (a === 'c' && customerId && b === 'r' && restaurantId) return viewRestaurant(customerId, restaurantId, tab, isStale);
   if (a === 'c' && customerId) return viewRestaurants(customerId, isStale);
   return viewCustomers(isStale);
@@ -53,25 +55,82 @@ async function viewCustomers(isStale) {
 
 async function viewRestaurants(customerId, isStale) {
   setScreen('Cargando…', '#/', loading());
-  const [customer, restaurants] = await Promise.all([api(`/api/customers/${customerId}`), api('/api/restaurants')]);
+  const [customer, restaurants] = await Promise.all([
+    api(`/api/customers/${customerId}`),
+    api('/api/restaurants'),
+  ]);
   if (isStale()) return;
 
   const rows = restaurants.map((restaurant) =>
-    h(
-      'li',
-      null,
-      h(
-        'a',
-        { class: 'row', href: `#/c/${customerId}/r/${restaurant.id}/mesas` },
-        h('div', { class: 'grow' }, h('strong', null, restaurant.name), restaurant.address && h('div', { class: 'muted small' }, restaurant.address)),
-      ),
-    ),
+    h('li', null, h(
+      'a',
+      { class: 'row', href: `#/c/${customerId}/r/${restaurant.id}/mesas` },
+      h('div', { class: 'grow' },
+        h('strong', null, restaurant.name),
+        restaurant.address && h('div', { class: 'muted small' }, restaurant.address)),
+    )),
   );
+
   setScreen(
     `Hola, ${customer.name}`,
     '#/',
+    h('a', { class: 'btn ghost', href: `#/c/${customerId}/reservas` }, 'Mis reservas'),
     h('h2', null, 'Restaurantes'),
     h('ul', { class: 'list' }, rows.length ? rows : empty('Todavía no hay restaurantes. Vuelve más tarde.')),
+  );
+}
+
+/* ---------- Mis reservas ---------- */
+
+async function viewMyReservations(customerId, isStale) {
+  setScreen('Cargando…', `#/c/${customerId}`, loading());
+  const reservations = await api(`/api/customers/${customerId}/reservations`);
+  if (isStale()) return;
+
+  const list = h('ul', { class: 'list ledger' }, ...(reservations.length
+    ? reservations.map((r) => h('li', { class: 'ledger-row' },
+        h('div', { class: 'time' }, `${formatDate(r.date)} ${r.time}`),
+        h('div', { class: 'what' },
+          h('strong', null, r.restaurant),
+          h('div', { class: 'muted' }, `Mesa ${r.table}`),
+          h('div', { class: 'actions' },
+            h('button', {
+              class: 'btn small ghost', type: 'button',
+              onclick: async () => {
+                const newDate = prompt('Nueva fecha (AAAA-MM-DD):', r.date);
+                if (newDate === null) return;
+                const newTime = prompt('Nueva hora (HH:MM):', r.time);
+                if (newTime === null) return;
+                try {
+                  await api(`/api/reservations/${r.id}`, {
+                    method: 'PATCH', body: { date: newDate, time: newTime },
+                  });
+                  toast('Reserva actualizada');
+                  await viewMyReservations(customerId, isStale);
+                } catch (err) { toast(err.message, true); }
+              },
+            }, 'Editar'),
+            h('button', {
+              class: 'btn small danger', type: 'button',
+              onclick: async () => {
+                if (!confirm('¿Cancelar esta reserva?')) return;
+                try {
+                  await api(`/api/reservations/${r.id}`, { method: 'DELETE' });
+                  toast('Reserva cancelada');
+                  await viewMyReservations(customerId, isStale);
+                } catch (err) { toast(err.message, true); }
+              },
+            }, 'Cancelar'),
+          ),
+        ),
+      )),
+    : [empty('Todavía no has hecho reservas.')],
+  ));
+
+  setScreen(
+    'Mis reservas',
+    `#/c/${customerId}`,
+    list,
   );
 }
 
@@ -96,7 +155,6 @@ async function viewRestaurant(customerId, restaurantId, tab, isStale) {
   await tabs[tab](customerId, restaurantId, box, isStale);
 }
 
-/* Se elige fecha y hora, se ven las mesas libres y reservadas en esa franja y se reserva. */
 async function tabTables(customerId, restaurantId, box, isStale) {
   const date = h('input', { name: 'date', type: 'date', value: todayStr(), min: todayStr(), required: true });
   const time = timeSelect('21:00');
@@ -106,14 +164,12 @@ async function tabTables(customerId, restaurantId, box, isStale) {
 
   async function refresh() {
     if (!date.value) {
-      latest++; // descarta cualquier consulta anterior que aún esté en curso
+      latest++;
       list.removeAttribute('aria-busy');
       list.replaceChildren(empty('Elige una fecha para ver las mesas libres.'));
       return;
     }
     const request = ++latest;
-    // Mientras se recarga, la lista se atenúa y no admite toques: así nunca se reserva
-    // una mesa de la lista antigua con la fecha u hora nuevas.
     list.setAttribute('aria-busy', 'true');
     let tables;
     try {
@@ -121,20 +177,21 @@ async function tabTables(customerId, restaurantId, box, isStale) {
     } finally {
       if (request === latest) list.removeAttribute('aria-busy');
     }
-    if (request !== latest || isStale()) return; // llegó tarde: ya se cambió la fecha u hora
+    if (request !== latest || isStale()) return;
     const rows = tables.map((table) =>
-      h(
-        'li',
-        null,
-        h(
-          'div',
-          { class: table.reserved ? 'row taken' : 'row' },
-          h('div', { class: 'grow' }, h('strong', null, table.name), h('div', { class: 'muted small' }, people(table.capacity))),
-          table.reserved
-            ? h('span', { class: 'status' }, 'Reservada')
-            : h('button', { class: 'btn small', type: 'button', onclick: (event) => reserve(table, event.currentTarget) }, 'Reservar'),
-        ),
-      ),
+      h('li', null, h(
+        'div',
+        { class: table.reserved ? 'row taken' : 'row' },
+        h('div', { class: 'grow' },
+          h('strong', null, table.name),
+          h('div', { class: 'muted small' }, people(table.capacity))),
+        table.reserved
+          ? h('span', { class: 'status' }, 'Reservada')
+          : h('button', {
+              class: 'btn small', type: 'button',
+              onclick: (event) => reserve(table, event.currentTarget),
+            }, 'Reservar'),
+      )),
     );
     list.replaceChildren(...(rows.length ? rows : [empty('Este restaurante aún no ha añadido mesas.')]));
   }
@@ -150,7 +207,7 @@ async function tabTables(customerId, restaurantId, box, isStale) {
     } catch (err) {
       toast(err.message, true);
     }
-    await refresh().catch((err) => toast(err.message, true)); // actualiza el estado de las mesas en ambos casos
+    await refresh().catch((err) => toast(err.message, true));
   }
 
   const reload = () => refresh().catch((err) => toast(err.message, true));
