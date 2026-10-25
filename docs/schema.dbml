@@ -1,0 +1,127 @@
+// Esquema real de la base de datos (versión 2): lo que hay en backend/*/models.py.
+// Se mantiene a mano. Si cambias un modelo, actualiza este archivo: tests/test_schema_doc.py avisa si no coinciden.
+// Para verlo dibujado, pega este texto en https://dbdiagram.io
+//
+// Diferencias con el esquema que diseñaste (ver README, apartado "Del esquema DBML a la base de datos"):
+//   - ORDERS es la comanda y ORDERS_ITEM sus líneas; la cantidad y el precio viven en la línea.
+//   - Las comandas y las facturas guardan copia del nombre y del precio, para que sigan siendo
+//     legibles aunque se edite o se borre un plato o una mesa.
+//   - Faltan (a propósito, para más adelante): FACILITIES, login/permisos de users, datos extra de
+//     restaurants/items y el cliente en comandas y facturas.
+
+Table users {
+  id integer [pk, increment]
+  username varchar(80) [not null]
+}
+
+Table users_restaurants {
+  id integer [pk, increment]
+  user_id integer [not null]
+  restaurant_id integer [not null]
+
+  indexes {
+    (user_id, restaurant_id) [unique]
+  }
+}
+
+Table customers {
+  id integer [pk, increment]
+  name varchar(80) [not null]
+}
+
+Table restaurants {
+  id integer [pk, increment]
+  name varchar(120) [not null]
+  address varchar(200)
+}
+
+Table tables {
+  id integer [pk, increment]
+  restaurant_id integer [not null]
+  name varchar(40) [not null]
+  capacity integer [not null]
+}
+
+Table items {
+  id integer [pk, increment]
+  restaurant_id integer [not null]
+  name varchar(120) [not null]
+  description varchar(300)
+  price numeric(10,2) [not null]
+}
+
+Table payment_methods {
+  id integer [pk, increment]
+  restaurant_id integer [not null]
+  name varchar(60) [not null]
+
+  indexes {
+    (restaurant_id, name) [unique]
+  }
+}
+
+Table orders {
+  id integer [pk, increment]
+  restaurant_id integer [not null]
+  table_id integer
+  user_id integer
+  bill_id integer
+  created_at timestamptz [not null]
+  requests varchar(300)
+  status varchar(20) [not null, note: 'pedido, en_preparacion, listo_para_servir, servido o cancelado']
+  is_paid boolean [not null]
+}
+
+Table orders_item {
+  id integer [pk, increment]
+  order_id integer [not null]
+  item_id integer
+  user_id integer
+  item_name varchar(120) [not null, note: 'copia del nombre del plato al pedirlo']
+  unit_price numeric(10,2) [not null, note: 'copia del precio al pedirlo']
+  quantity integer [not null]
+}
+
+Table bills {
+  id integer [pk, increment]
+  restaurant_id integer [not null]
+  table_id integer
+  table_name varchar(40) [not null, note: 'copia del nombre de la mesa']
+  user_id integer
+  open_datetime timestamptz [not null, note: 'cuando se emite']
+  close_datetime timestamptz [note: 'cuando se cobra; vacío = pendiente de cobro']
+  total numeric(10,2) [not null]
+  payment_method_id integer
+}
+
+Table reservations {
+  id integer [pk, increment]
+  table_id integer [not null]
+  customer_id integer [not null]
+  date date [not null]
+  time time [not null]
+
+  indexes {
+    (table_id, date, time) [unique]
+  }
+}
+
+// Si se borra el padre: [delete: cascade] borra también el hijo; [delete: set null] conserva el hijo sin el vínculo.
+Ref: users_restaurants.user_id > users.id [delete: cascade]
+Ref: users_restaurants.restaurant_id > restaurants.id [delete: cascade]
+Ref: tables.restaurant_id > restaurants.id [delete: cascade]
+Ref: items.restaurant_id > restaurants.id [delete: cascade]
+Ref: payment_methods.restaurant_id > restaurants.id [delete: cascade]
+Ref: orders.restaurant_id > restaurants.id [delete: cascade]
+Ref: orders.table_id > tables.id [delete: set null]
+Ref: orders.user_id > users.id [delete: set null]
+Ref: orders.bill_id > bills.id [delete: set null]
+Ref: orders_item.order_id > orders.id [delete: cascade]
+Ref: orders_item.item_id > items.id [delete: set null]
+Ref: orders_item.user_id > users.id [delete: set null]
+Ref: bills.restaurant_id > restaurants.id [delete: cascade]
+Ref: bills.table_id > tables.id [delete: set null]
+Ref: bills.user_id > users.id [delete: set null]
+Ref: bills.payment_method_id > payment_methods.id [delete: set null]
+Ref: reservations.table_id > tables.id [delete: cascade]
+Ref: reservations.customer_id > customers.id [delete: cascade]
