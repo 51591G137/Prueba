@@ -89,9 +89,11 @@ Postgres: basta con poner su URL `postgresql://...` en `DATABASE_URL`.
 
 ### Al pasar de la versión 1 a esta
 
-La primera migración (`0001`) **borra las tablas de la versión anterior y sus datos de prueba**, y crea
-el esquema nuevo. Es lo único destructivo que hace. Si tu `DATABASE_URL` apuntaba a datos de la v1,
-se descartan en el primer arranque. Las migraciones siguientes ya no borrarán datos.
+La primera migración (`0001`) **borra los restos de versiones anteriores y sus datos de prueba**, y crea
+el esquema nuevo. Es lo único destructivo que hace. Borra las tablas con nombres de esta app (`users`,
+`restaurants`, `tables`, `menu_items`, `orders`, `bills`...) y las que dependen de ellas por clave foránea
+(por ejemplo un antiguo `order_items`). **Cualquier otra tabla de la base de datos no se toca**, así que
+puedes compartir el Postgres gratuito con otra app. Las migraciones siguientes ya no borrarán datos.
 
 Borra del repositorio los archivos que ya no se usan: `static/comun.js`, `static/restaurante.js`,
 `static/cliente.js` y `static/estilos.css`.
@@ -105,6 +107,10 @@ solas al arrancar la app** (en local y en Render). Para cambiar la base de datos
 2. Genera la migración: `flask --app app db migrate -m "descripción" --rev-id 0002` (el siguiente número libre).
 3. Revisa el archivo creado y súbelo con el resto. Al desplegar se aplica sola.
 4. Actualiza `docs/schema.dbml` (`python tests/test_schema_doc.py` avisa si no coincide).
+
+El generador de migraciones ignora las tablas que no están en los modelos (por ejemplo las de otra app que
+comparta la base), así que nunca propone borrarlas. Si quitas un modelo y quieres borrar también su tabla,
+escribe el `op.drop_table(...)` a mano en la migración.
 
 `AUTO_MIGRATE=0` desactiva la migración automática al arrancar.
 

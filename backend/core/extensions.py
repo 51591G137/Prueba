@@ -26,3 +26,10 @@ def _sqlite_foreign_keys(dbapi_connection, _record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+
+def skip_foreign_tables(obj, name, type_, reflected, compare_to):
+    """Para `flask db migrate`: ignora las tablas que están en la base de datos pero no en los modelos
+    (por ejemplo, las de otra app que comparta la misma base), así nunca propone borrarlas.
+    Si algún día quitas un modelo y quieres borrar su tabla, escribe el `op.drop_table(...)` a mano."""
+    return not (type_ == "table" and reflected and compare_to is None)

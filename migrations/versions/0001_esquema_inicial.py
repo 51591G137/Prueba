@@ -1,7 +1,9 @@
 """esquema inicial (versión 2)
 
-Crea todas las tablas. Si la base de datos viene de la versión 1 de la app (solo datos de
-prueba), esas tablas antiguas se eliminan antes: es lo único destructivo que hace esta migración.
+Crea todas las tablas. Si la base de datos trae restos de versiones anteriores (solo datos de
+prueba), se eliminan antes: es lo único destructivo que hace esta migración. Se borran las tablas
+con nombres de esta app (las de la versión 1 y las nuevas) y las que dependen de ellas por clave
+foránea; cualquier otra tabla de la base de datos no se toca.
 Las migraciones siguientes ya no borrarán datos.
 
 Revision ID: 0001
@@ -18,20 +20,52 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
-# Tablas de la versión 1, de la más dependiente a la menos (orden de borrado).
-LEGACY_V1_TABLES = ("reservations", "menu_items", "tables", "restaurants", "customers", "users")
+# Tablas que son de esta app: las de la versión 1 y las que crea esta migración.
+# Antes de ejecutarse la 0001 no debería existir ninguna con estos nombres, salvo restos antiguos.
+APP_TABLES = {
+    "users", "customers", "restaurants", "tables", "menu_items", "reservations",  # versión 1
+    "users_restaurants", "items", "payment_methods", "orders", "orders_item", "bills",  # esta versión
+}
 
 
-def drop_legacy_v1_schema():
-    inspector = sa.inspect(op.get_bind())
-    if inspector.has_table("menu_items"):  # esa tabla solo existía en la versión 1
-        for name in LEGACY_V1_TABLES:
-            if inspector.has_table(name):
-                op.drop_table(name)
+def drop_legacy_schema():
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing = set(inspector.get_table_names())
+    doomed = existing & APP_TABLES
+    if not doomed:
+        return
+
+    # También las tablas que dependen de las anteriores por clave foránea, de forma transitiva
+    # (por ejemplo un antiguo order_items que apunta a menu_items).
+    grew = True
+    while grew:
+        grew = False
+        for name in sorted(existing - doomed):
+            if any(fk["referred_table"] in doomed for fk in inspector.get_foreign_keys(name)):
+                doomed.add(name)
+                grew = True
+
+    if bind.dialect.name == "postgresql":
+        quote = bind.dialect.identifier_preparer.quote
+        for name in sorted(doomed):
+            op.execute(f"DROP TABLE IF EXISTS {quote(name)} CASCADE")
+        return
+
+    # SQLite y otras: no hay CASCADE, así que primero se borran las tablas que dependen de otras.
+    remaining = set(doomed)
+    while remaining:
+        free = [
+            name for name in sorted(remaining)
+            if not any(fk["referred_table"] == name for other in remaining - {name} for fk in inspector.get_foreign_keys(other))
+        ]
+        for name in free or sorted(remaining):  # si hubiera un ciclo, se intenta igualmente
+            op.drop_table(name)
+            remaining.discard(name)
 
 
 def upgrade():
-    drop_legacy_v1_schema()
+    drop_legacy_schema()
     op.create_table('customers',
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('name', sa.String(length=80), nullable=False),

@@ -13,7 +13,7 @@ from flask_migrate import upgrade
 
 from .core.config import database_url, normalize_url
 from .core.errors import register_error_handlers
-from .core.extensions import db, migrate
+from .core.extensions import db, migrate, skip_foreign_tables
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MIGRATIONS_DIR = os.path.join(ROOT, "migrations")
@@ -27,7 +27,7 @@ def create_app(overrides=None):
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
 
     db.init_app(app)
-    migrate.init_app(app, db, directory=MIGRATIONS_DIR, render_as_batch=True)
+    migrate.init_app(app, db, directory=MIGRATIONS_DIR, render_as_batch=True, include_object=skip_foreign_tables)
 
     from . import models  # noqa: F401  (registra las tablas)
     from .routes import register_blueprints
