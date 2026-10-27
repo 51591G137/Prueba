@@ -25,6 +25,8 @@ def create_app(overrides=None):
     app = Flask(__name__, static_folder=os.path.join(ROOT, "static"), static_url_path="/static")
     app.config["SQLALCHEMY_DATABASE_URI"] = normalize_url(overrides["DATABASE_URL"]) if overrides.get("DATABASE_URL") else database_url(ROOT)
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
+    # ponytail: native cookie sessions via SECRET_KEY (no extra session stores needed)
+    app.config["SECRET_KEY"] = overrides.get("SECRET_KEY", os.environ.get("SECRET_KEY", "dev-secret-key-change-in-prod"))
 
     db.init_app(app)
     migrate.init_app(app, db, directory=MIGRATIONS_DIR, render_as_batch=True, include_object=skip_foreign_tables)

@@ -8,6 +8,10 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), nullable=False)
+    # ponytail: password_hash storage with werkzeug.security; nullable for legacy seeds
+    password_hash = db.Column(db.String(255), nullable=True)
+    # ponytail: email for self-service password reset; unique and indexed
+    email = db.Column(db.String(120), unique=True, index=True, nullable=True)
 
 
 class UserRestaurant(db.Model):

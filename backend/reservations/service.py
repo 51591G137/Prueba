@@ -3,7 +3,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ..core.errors import ApiError
 from ..core.extensions import db
-from ..core.validation import id_field, parse_date, parse_time
+from ..core.validation import id_field, parse_date, parse_time, text_field
 from ..customers.models import Customer
 from ..restaurants.models import Restaurant
 from ..tables.models import RestaurantTable
@@ -45,7 +45,8 @@ def reservation_json(reservation, table, restaurant, customer):
         "restaurant_id": restaurant.id,
         "restaurant": restaurant.name,
         "customer_id": customer.id,
-        "customer": customer.name,
+        "customer": customer.name or customer.phone,
+        "phone": customer.phone,
     }
 
 
@@ -81,7 +82,18 @@ def _commit_or_conflict():
 
 
 def create_reservation(data):
-    customer = db.session.get(Customer, id_field(data, "customer_id", "El cliente"))
+    # ponytail: accept customer_id or phone (direct phone booking)
+    if "customer_id" in data and data["customer_id"]:
+        customer = db.session.get(Customer, id_field(data, "customer_id", "El cliente"))
+    elif "phone" in data:
+        phone = text_field(data, "phone", "El teléfono", 30)
+        name = text_field(data, "name", "El nombre", 80, required=False)
+        from ..customers.service import get_or_create_by_phone
+
+        customer = get_or_create_by_phone(phone, name)
+    else:
+        raise ApiError("El cliente o el teléfono es obligatorio.")
+
     table = db.session.get(RestaurantTable, id_field(data, "table_id", "La mesa"))
     if customer is None or table is None:
         raise ApiError("No se encontró el cliente o la mesa.", 404)

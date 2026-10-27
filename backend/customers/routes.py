@@ -21,3 +21,9 @@ def create_customer():
 @bp.get("/api/customers/<int:customer_id>")
 def get_customer(customer_id):
     return jsonify(service.customer_json(db.get_or_404(Customer, customer_id)))
+
+
+@bp.get("/api/customers/by-phone/<phone>")
+def get_customer_by_phone(phone):
+    customer = Customer.query.filter_by(phone=phone.strip()).first_or_404()
+    return jsonify(service.customer_json(customer))

@@ -12,6 +12,8 @@
 Table users {
   id integer [pk, increment]
   username varchar(80) [not null]
+  password_hash varchar(255)
+  email varchar(120) [unique]
 }
 
 Table users_restaurants {
@@ -26,7 +28,8 @@ Table users_restaurants {
 
 Table customers {
   id integer [pk, increment]
-  name varchar(80) [not null]
+  name varchar(80)
+  phone varchar(30) [unique]
 }
 
 Table restaurants {

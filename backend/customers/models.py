@@ -7,4 +7,6 @@ class Customer(db.Model):
     __tablename__ = "customers"
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(80), nullable=False)
+    name = db.Column(db.String(80), nullable=True)
+    # ponytail: phone-only customer auth; index + unique
+    phone = db.Column(db.String(30), unique=True, index=True, nullable=True)

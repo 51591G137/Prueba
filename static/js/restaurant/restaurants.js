@@ -1,7 +1,8 @@
 /* Restaurantes de un usuario: ver los suyos y crear uno nuevo. */
 import { api } from '../core/api.js';
 import { field, fill, h, loading } from '../core/dom.js';
-import { onSubmit, setScreen, toast } from '../core/ui.js';
+import { navigate } from '../core/router.js';
+import { guarded, onSubmit, setScreen, toast } from '../core/ui.js';
 
 export async function viewRestaurants({ params, stale }) {
   const { uid } = params;
@@ -48,6 +49,26 @@ export async function viewRestaurants({ params, stale }) {
     h('button', { class: 'btn', type: 'submit' }, 'Crear restaurante'),
   );
 
-  setScreen(`Hola, ${user.username}`, '#/', h('h2', null, 'Tus restaurantes'), list, form);
+  const userHeader = h(
+    'div',
+    { class: 'row', style: 'margin-bottom: 1rem;' },
+    h('h2', { class: 'grow' }, 'Tus restaurantes'),
+    h(
+      'button',
+      {
+        class: 'btn small secondary',
+        type: 'button',
+        onclick: guarded(async () => {
+          localStorage.removeItem('staff_token');
+          await api.post('/api/auth/logout');
+          toast('Sesión cerrada');
+          navigate('#/');
+        }),
+      },
+      'Cerrar sesión',
+    ),
+  );
+
+  setScreen(`Hola, ${user.username}`, null, userHeader, list, form);
   await refresh();
 }

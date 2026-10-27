@@ -41,6 +41,14 @@ def list_customer_reservations(customer_id):
     return jsonify(service.customer_reservations(customer_id, from_day))
 
 
+@bp.get("/api/customers/by-phone/<phone>/reservations")
+def list_customer_reservations_by_phone(phone):
+    """Reservas de un cliente por teléfono. Con ?from=AAAA-MM-DD solo las de esa fecha en adelante."""
+    customer = Customer.query.filter_by(phone=phone.strip()).first_or_404()
+    from_day = parse_date(request.args["from"]) if request.args.get("from") else None
+    return jsonify(service.customer_reservations(customer.id, from_day))
+
+
 @bp.get("/api/restaurants/<int:restaurant_id>/reservations")
 def list_restaurant_reservations(restaurant_id):
     """Reservas del restaurante en una fecha (?date=AAAA-MM-DD) y, opcionalmente, a una hora (?time=HH:MM)."""

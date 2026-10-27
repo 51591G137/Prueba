@@ -8,37 +8,60 @@ const TITLE = 'Gestión del restaurante';
 
 export async function viewUsers({ stale }) {
   setScreen(TITLE, null, loading());
+  // Comprobar si ya hay una sesión activa
+  const me = await api.get('/api/auth/me').catch(() => null);
+  if (me && me.id) {
+    navigate(`#/u/${me.id}`);
+    return;
+  }
   const users = await api.get('/api/users');
   if (stale()) return;
 
-  const form = h(
+  const loginForm = h(
+    'form',
+    {
+      class: 'panel',
+      onsubmit: onSubmit(async (data) => {
+        const res = await api.post('/api/auth/login', data);
+        if (res.token) localStorage.setItem('staff_token', res.token);
+        toast(`Sesión iniciada como ${res.user.username}`);
+        navigate(`#/u/${res.user.id}`);
+      }),
+    },
+    h('h2', null, 'Iniciar sesión'),
+    field('Usuario', h('input', { name: 'username', type: 'text', required: true, maxlength: 80, autocomplete: 'username' })),
+    field('Contraseña', h('input', { name: 'password', type: 'password', maxlength: 128, autocomplete: 'current-password' })),
+    h('button', { class: 'btn', type: 'submit' }, 'Entrar'),
+    h('p', { class: 'small muted', style: 'margin-top: 1rem;' }, h('a', { href: '#/olvide-clave' }, '¿Has olvidado tu contraseña?')),
+  );
+
+  const registerForm = h(
     'form',
     {
       class: 'panel',
       onsubmit: onSubmit(async (data) => {
         const user = await api.post('/api/users', data);
-        toast('Usuario creado');
+        const res = await api.post('/api/auth/login', { username: data.username, password: data.password });
+        if (res.token) localStorage.setItem('staff_token', res.token);
+        toast('Usuario creado y sesión iniciada');
         navigate(`#/u/${user.id}`);
       }),
     },
-    h('h2', null, 'Nuevo usuario'),
-    field('Nombre de usuario', h('input', { name: 'username', type: 'text', required: true, maxlength: 80, autocomplete: 'off' })),
-    h('button', { class: 'btn', type: 'submit' }, 'Crear usuario'),
+    h('h2', null, 'Crear usuario'),
+    field('Usuario', h('input', { name: 'username', type: 'text', required: true, maxlength: 80, autocomplete: 'off' })),
+    field('Correo electrónico (para recuperar contraseña)', h('input', { name: 'email', type: 'email', maxlength: 120, autocomplete: 'email' })),
+    field('Contraseña (opcional)', h('input', { name: 'password', type: 'password', maxlength: 128, autocomplete: 'new-password' })),
+    h('button', { class: 'btn secondary', type: 'submit' }, 'Crear y entrar'),
   );
 
-  const row = (user) =>
-    h(
-      'li',
-      null,
-      h(
-        'div',
-        { class: 'row' },
-        h('a', { class: 'main', href: `#/u/${user.id}` }, h('strong', null, user.username)),
-        h('a', { class: 'btn small secondary', href: `#/u/${user.id}/editar`, 'aria-label': `Editar a ${user.username}` }, 'Editar'),
-      ),
-    );
-
-  setScreen(TITLE, null, h('h2', null, 'Elige un usuario'), listOf(users, row, 'Todavía no hay usuarios. Crea el primero.'), form);
+  setScreen(
+    TITLE,
+    null,
+    loginForm,
+    users.length === 0
+      ? registerForm
+      : h('details', { class: 'panel' }, h('summary', null, '¿Nuevo usuario? Regístralo aquí'), registerForm),
+  );
 }
 
 export async function viewUserEdit({ params, stale }) {
@@ -57,8 +80,10 @@ export async function viewUserEdit({ params, stale }) {
         leave('#/');
       }),
     },
-    h('h2', null, 'Nombre de usuario'),
+    h('h2', null, 'Datos del usuario'),
     field('Nombre de usuario', h('input', { name: 'username', type: 'text', value: user.username, required: true, maxlength: 80 })),
+    field('Correo electrónico', h('input', { name: 'email', type: 'email', value: user.email || '', maxlength: 120 })),
+    field('Nueva contraseña (opcional)', h('input', { name: 'password', type: 'password', maxlength: 128, placeholder: 'Dejar en blanco para conservar la actual' })),
     h('button', { class: 'btn', type: 'submit' }, 'Guardar cambios'),
   );
 
@@ -84,4 +109,52 @@ export async function viewUserEdit({ params, stale }) {
     form,
     h('div', { class: 'danger-zone' }, h('button', { class: 'btn danger', type: 'button', onclick: remove }, 'Borrar usuario')),
   );
+}
+
+export async function viewForgotPassword() {
+  const form = h(
+    'form',
+    {
+      class: 'panel',
+      onsubmit: onSubmit(async (data) => {
+        await api.post('/api/auth/forgot-password', data);
+        toast('Si el correo está registrado, recibirás un enlace');
+        navigate('#/');
+      }),
+    },
+    h('h2', null, 'Recuperar contraseña'),
+    h('p', { class: 'muted' }, 'Introduce tu correo y te enviaremos un enlace válido durante 1 hora para restablecerla.'),
+    field('Correo electrónico', h('input', { name: 'email', type: 'email', required: true, maxlength: 120, autocomplete: 'email' })),
+    h('button', { class: 'btn', type: 'submit' }, 'Enviar enlace'),
+  );
+
+  setScreen('Recuperar contraseña', '#/', form);
+}
+
+export async function viewResetPassword() {
+  // Extraer token de la URL (?token=...)
+  const hashParts = location.hash.split('?');
+  const query = new URLSearchParams(hashParts[1] || '');
+  const urlToken = query.get('token') || '';
+
+  const form = h(
+    'form',
+    {
+      class: 'panel',
+      onsubmit: onSubmit(async (data) => {
+        await api.post('/api/auth/reset-password', {
+          token: data.token || urlToken,
+          password: data.password,
+        });
+        toast('Contraseña restablecida con éxito. Ya puedes iniciar sesión.');
+        navigate('#/');
+      }),
+    },
+    h('h2', null, 'Nueva contraseña'),
+    !urlToken && field('Token de restablecimiento', h('input', { name: 'token', type: 'text', required: true })),
+    field('Nueva contraseña', h('input', { name: 'password', type: 'password', required: true, maxlength: 128, autocomplete: 'new-password' })),
+    h('button', { class: 'btn', type: 'submit' }, 'Guardar nueva contraseña'),
+  );
+
+  setScreen('Restablecer contraseña', '#/', form);
 }

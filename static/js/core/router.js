@@ -35,7 +35,8 @@ export function startRouter(routes) {
     const id = ++current;
     const stale = () => id !== current;
     dismissDialog();
-    const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+    const path = location.hash.replace(/^#\/?/, '').split('?')[0];
+    const parts = path.split('/').filter(Boolean);
     for (const [match, view] of compiled) {
       const params = match(parts);
       if (params) {

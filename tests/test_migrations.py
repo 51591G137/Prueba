@@ -70,10 +70,13 @@ with app.app_context():
     ok(set(insp.get_table_names()) == EXPECTED | OTHERS, f"tablas tras migrar: {sorted(insp.get_table_names())}")
     ok("restaurant_id" in {c["name"] for c in insp.get_columns("orders")}, "orders es ya la tabla nueva")
     ok("username" in {c["name"] for c in insp.get_columns("users")}, "users tiene la columna nueva «username»")
+    ok("password_hash" in {c["name"] for c in insp.get_columns("users")}, "users tiene la columna nueva «password_hash»")
+    ok("email" in {c["name"] for c in insp.get_columns("users")}, "users tiene la columna nueva «email»")
+    ok("phone" in {c["name"] for c in insp.get_columns("customers")}, "customers tiene la columna nueva «phone»")
     with db.engine.connect() as conn:
         ok(conn.execute(sa.text("SELECT COUNT(*) FROM users")).scalar() == 0, "los datos de prueba antiguos se descartan")
         ok(conn.execute(sa.text("SELECT nota FROM auditoria_externa")).scalar() == "no me borres", "la tabla ajena conserva sus datos")
-        ok(conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar() == "0001", "versión de esquema 0001")
+        ok(conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar() == "0003", "versión de esquema 0003")
     check(directory=MIGRATIONS_DIR)  # lanza un error si los modelos y las migraciones no coinciden
     ok(True, "los modelos y las migraciones coinciden (sin cambios pendientes)")
 

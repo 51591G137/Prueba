@@ -2,10 +2,13 @@
 
 async function request(path, { method = 'GET', body } = {}) {
   let res;
+  const headers = body ? { 'Content-Type': 'application/json' } : {};
+  const token = localStorage.getItem('staff_token');
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   try {
     res = await fetch(path, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
+      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (err) {

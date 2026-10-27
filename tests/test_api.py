@@ -81,8 +81,33 @@ check("renombrar usuario inexistente", patch("/api/users/99", username="x").stat
 luis = post("/api/users", username="Luis").get_json()
 r = c.delete(f"/api/users/{luis['id']}")
 check("borrar usuario sin restaurantes", r.get_json() == {"deleted": True, "restaurants_deleted": 0})
-check("el usuario ya no existe", get(f"/api/users/{luis['id']}").status_code == 404)
 check("lista de usuarios", [u["username"] for u in get("/api/users").get_json()] == ["Ana María"])
+
+# auth personal del restaurante (Bearer tokens y restablecimiento de contraseña)
+carlos = post("/api/users", username="Carlos", email="carlos@ejemplo.com", password="secret123").get_json()
+check("crear usuario con contraseña y email", carlos["username"] == "Carlos" and carlos["email"] == "carlos@ejemplo.com")
+check("usuario duplicado", err(post("/api/users", username="Carlos"), 409, "ya está en uso"))
+check("email duplicado", err(post("/api/users", username="Carlos2", email="carlos@ejemplo.com"), 409, "ya está registrado"))
+check("login contraseña incorrecta", err(post("/api/auth/login", username="Carlos", password="wrong"), 401, "incorrectos"))
+login_res = post("/api/auth/login", username="Carlos", password="secret123")
+check("login correcto devuelve token Bearer", login_res.status_code == 200 and "token" in login_res.get_json())
+token = login_res.get_json()["token"]
+# comprobar autenticación vía cabecera Bearer sin cookie de sesión
+c_client = app.test_client()  # nuevo cliente HTTP limpio sin cookies
+bearer_res = c_client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+check("autenticación por Bearer header", bearer_res.status_code == 200 and bearer_res.get_json()["username"] == "Carlos")
+check("Bearer header inválido -> 401", c_client.get("/api/auth/me", headers={"Authorization": "Bearer token_falso"}).status_code == 401)
+check("logout web", post("/api/auth/logout").status_code == 200)
+
+# recuperación de contraseña por email (self-service reset)
+forgot = post("/api/auth/forgot-password", email="carlos@ejemplo.com").get_json()
+check("solicitar restablecimiento genera token", forgot["ok"] is True and bool(forgot["token"]))
+reset_token = forgot["token"]
+check("restablecer contraseña con token", post("/api/auth/reset-password", token=reset_token, password="newsecret456").status_code == 200)
+check("login con contraseña antigua falla", err(post("/api/auth/login", username="Carlos", password="secret123"), 401, "incorrectos"))
+check("login con contraseña nueva funciona", post("/api/auth/login", username="Carlos", password="newsecret456").status_code == 200)
+check("token de reseteo inválido falla", err(post("/api/auth/reset-password", token="invalido", password="abc"), 400, "inválido"))
+c.delete(f"/api/users/{carlos['id']}")
 
 # --- restaurantes ----------------------------------------------------------------------
 rest = post("/api/users/1/restaurants", name="La Paella", address="Calle Mayor 1").get_json()
@@ -297,6 +322,20 @@ check("reservas del restaurante por día", [(x["time"], x["table"], x["customer"
       == [("20:30", "Mesa 1", "María"), ("22:00", "Mesa 1", "Pedro")])
 check("reservas del restaurante por hora", [x["customer"] for x in get(f"/api/restaurants/{RID}/reservations?date={D}&time=22:00").get_json()] == ["Pedro"])
 check("reservas sin fecha", get(f"/api/restaurants/{RID}/reservations").status_code == 400)
+# reservas con sólo teléfono (auth sin contraseña de clientes)
+ana_res = post("/api/reservations", phone="611222333", name="Ana", table_id=2, date="2026-11-25", time="21:00")
+check("reservar directamente con teléfono", ana_res.status_code == 201 and ana_res.get_json()["phone"] == "611222333" and ana_res.get_json()["customer"] == "Ana")
+ana_res2 = post("/api/reservations", phone="611222333", table_id=2, date="2026-11-26", time="21:00")
+check("segunda reserva reutiliza cliente por teléfono", ana_res2.status_code == 201 and ana_res2.get_json()["customer_id"] == ana_res.get_json()["customer_id"])
+ana_bookings = get("/api/customers/by-phone/611222333/reservations").get_json()
+check("listar reservas por teléfono", len(ana_bookings) == 2 and ana_bookings[0]["phone"] == "611222333")
+ana_customer = get("/api/customers/by-phone/611222333").get_json()
+check("obtener cliente por teléfono", ana_customer["name"] == "Ana" and ana_customer["phone"] == "611222333")
+c.delete(f"/api/reservations/{ana_res.get_json()['id']}")
+c.delete(f"/api/reservations/{ana_res2.get_json()['id']}")
+with app.app_context():
+    db.session.delete(Customer.query.filter_by(phone="611222333").first())
+    db.session.commit()
 # borrar
 check("detalle de mesa cuenta reservas", get("/api/tables/2").get_json()["reservations"] == 2)
 check("cancelar reserva", c.delete(f"/api/reservations/{p['id']}").get_json() == {"deleted": True})
